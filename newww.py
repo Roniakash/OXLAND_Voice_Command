@@ -11,7 +11,7 @@ import sys
 # ==========================
 # CONFIG
 # ==========================
-gemini_key = "AIzaSyDU7k71ooFAqL6EIAV4k0QZUj2bccJ_zvk"
+gemini_key = "XXXXXXXXXXXXXXX"
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
 
 current_language = "en"
@@ -198,3 +198,4 @@ def main():
 # ==========================
 if __name__ == "__main__":
     main()
+
