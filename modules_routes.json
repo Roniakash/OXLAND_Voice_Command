@@ -1,0 +1,19 @@
+{
+  "Locations": "http://209.209.40.144:3031/locations",
+  "Projects": "http://209.209.40.144:3031/projects",
+  "Analytics": "http://209.209.40.144:3031/analytics",
+  "Land Acquisition": "http://209.209.40.144:3031/land-acquisition",
+  "Plot Management": "http://209.209.40.144:3031/plot-management",
+  "Document Search": "http://209.209.40.144:3031/document-search",
+  "R & R": "http://209.209.40.144:3031/r-r",
+  "Litigation & Court Cases": "http://209.209.40.144:3031/litigation-court-cases",
+  "Land Aggregator": "http://209.209.40.144:3031/land-aggregator",
+  "Agriculture": "http://209.209.40.144:3031/agriculture",
+  "Land Use & Land Cover": "http://209.209.40.144:3031/land-use-cover",
+  "Forest Land": "http://209.209.40.144:3031/forest-land",
+  "FAQs": "http://209.209.40.144:3031/faq",
+  "Dashboard": "http://209.209.40.144:3031/",
+  "Master Data": "http://209.209.40.144:3031/master-data",
+  "Imports": "http://209.209.40.144:3031/imports",
+  "Settings": "http://209.209.40.144:3031/settings"
+}

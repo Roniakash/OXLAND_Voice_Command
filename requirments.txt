@@ -1,0 +1,9 @@
+os
+tempfile
+uuid
+gTTS
+pygame
+datetime
+sys
+webbrowser
+speech_recognition
