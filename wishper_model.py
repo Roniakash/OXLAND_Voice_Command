@@ -56,7 +56,7 @@ def listen_once(recognizer: sr.Recognizer, mic: sr.Microphone, language_code="en
             np.int16
         ).astype(np.float32) / 32768.0
 
-        segments, _ = WHISPER_MODEL.transcribe(audio_data,beam_size=10,best_of=5,patience=2.0,language=language_code)
+        segments, _ = WHISPER_MODEL.transcribe(audio_data,beam_size=10,best_of=5,patience=2.0,language=language_code,condition_on_previous_text=True,temperature=0.0)
         text = " ".join([seg.text.strip() for seg in segments]).strip()
         if text:
             print(f"User: {text}")
