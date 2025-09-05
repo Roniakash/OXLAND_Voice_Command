@@ -42,21 +42,31 @@ def speak_and_print(text: str, tts_lang: str = "en"):
         print(f"[TTS error: {e}]")
 
 def listen_once(recognizer: sr.Recognizer, mic: sr.Microphone, language_code="en"):
-    """Capture voice and return recognized text using Whisper (no file saving)."""
+    """Capture voice and return recognized text using Whisper-small with tuned accuracy."""
     with mic as source:
-        recognizer.adjust_for_ambient_noise(source, duration=1.5)
+        recognizer.adjust_for_ambient_noise(source, duration=1.2)  # better noise calibration
         print("(Listening... waiting for user speech)")
-        audio = recognizer.listen(source)
+        audio = recognizer.listen(source, phrase_time_limit=12)  # limit to avoid cutoff
 
-    print("(Processing... recognizing speech with Whisper)")
+    print("(Processing... recognizing speech with Whisper-small)")
     try:
-        # Convert SR audio buffer to numpy array
+        # Convert SR audio buffer → numpy array for Whisper
         audio_data = np.frombuffer(
             audio.get_raw_data(convert_rate=16000, convert_width=2),
             np.int16
         ).astype(np.float32) / 32768.0
 
-        segments, _ = WHISPER_MODEL.transcribe(audio_data,beam_size=10,best_of=5,patience=2.0,language=language_code,condition_on_previous_text=True,temperature=0.0)
+        # Transcribe with stronger decoding settings
+        segments, _ = WHISPER_MODEL.transcribe(
+            audio_data,
+            beam_size=8,     # wider beam than default
+            best_of=5,       # tries multiple candidates
+            patience=1.5,    # avoids cutting too early
+            language=language_code,
+            condition_on_previous_text=True,  # keeps context consistent
+            temperature=0.0   # deterministic → less random mistakes
+        )
+
         text = " ".join([seg.text.strip() for seg in segments]).strip()
         if text:
             print(f"User: {text}")
@@ -69,6 +79,7 @@ def listen_once(recognizer: sr.Recognizer, mic: sr.Microphone, language_code="en
     except Exception as e:
         print(f"[Whisper error: {e}]")
         return None
+
 
 def detect_language_choice(text: str):
     """Detect if user said English or Hindi."""
