@@ -63,7 +63,7 @@ def listen_once(recognizer: sr.Recognizer, mic: sr.Microphone, language_code="en
             best_of=5,       # tries multiple candidates
             patience=1.5,    # avoids cutting too early
             language=language_code,
-            condition_on_previous_text=True,  # keeps context consistent
+            condition_on_previous_text=False,  # keeps context consistent
             temperature=0.0   # deterministic → less random mistakes
         )
 
@@ -142,7 +142,7 @@ def match_tab(user_text, tab_names):
         if name.lower() in user_text or user_text in name.lower():
             return name
 
-    matches = difflib.get_close_matches(user_text, [t.lower() for t in tab_names], n=1, cutoff=0.6)
+    matches = difflib.get_close_matches(user_text, [t.lower() for t in tab_names], n=1, cutoff=0.4)
     if matches:
         for name in tab_names:
             if name.lower() == matches[0]:
