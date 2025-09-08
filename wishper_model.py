@@ -1,28 +1,31 @@
 import json
 import webbrowser
+import tempfile
 import os
-import sys
 import time
+import sys
 import datetime
 import pygame
 import difflib
 from gtts import gTTS
-import sounddevice as sd
-import io
-import wave
-import tempfile
-from faster_whisper import WhisperModel
+import speech_recognition as sr
+
+try:
+    import sounddevice as sd
+    import numpy as np
+    from vosk import Model as VoskModel, KaldiRecognizer
+    HAS_VOSK = True
+except ImportError:
+    HAS_VOSK = False
+
 
 ASSISTANT_NAME = "Oxland"
 COMPANY_NAME = "Oxbow Intellect Private Limited"
 MODULES_FILE = r"C:\Users\ronia\Desktop\Voice_Command\modules_routes.json"
 
-# ------------------ Whisper model ------------------
-whisper_model = WhisperModel("tiny", device="cpu", compute_type="int8")  # small & fast
 
-# ------------------ TTS ------------------
 def speak_and_print(text: str, tts_lang: str = "en"):
-    """Speak out loud and print to console."""
+    """Speak out loud and print to console safely."""
     print(f"Assistant: {text}")
     try:
         tts = gTTS(text=text, lang=tts_lang)
@@ -43,57 +46,66 @@ def speak_and_print(text: str, tts_lang: str = "en"):
     except Exception as e:
         print(f"[TTS error: {e}]")
 
-# ------------------ Record & recognize audio ------------------
-def record_audio(seconds=5, samplerate=16000):
-    """Record audio and return WAV bytes in memory (no temp file)."""
-    print(f"(Listening for {seconds} seconds... speak now)")
-    audio = sd.rec(int(seconds * samplerate), samplerate=samplerate, channels=1, dtype="int16")
-    sd.wait()
 
-    buffer = io.BytesIO()
-    with wave.open(buffer, "wb") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(samplerate)
-        wf.writeframes(audio.tobytes())
-    buffer.seek(0)
-    return buffer
-
-def listen_once(language="en"):
-    """Record audio and transcribe with Whisper directly from memory."""
-    buffer = record_audio(seconds=5)
-    print("(Processing... recognizing speech with Whisper)")
+def listen_once(recognizer: sr.Recognizer, mic: sr.Microphone, language_code="en-US"):
+    """Capture voice and return recognized text (Google STT)."""
+    with mic as source:
+        recognizer.adjust_for_ambient_noise(source, duration=0.8)
+        print("🎙️ Listening...")
+        audio = recognizer.listen(source)
+    print("🔎 Processing...")
     try:
-        segments, _ = whisper_model.transcribe(buffer, beam_size=5, language=language)
-        text = " ".join([seg.text for seg in segments]).strip()
-        if text:
-            print(f"User: {text}")
-            speak_and_print(f"You said: {text}", "hi" if language == "hi" else "en")
-            return text
-        else:
-            print("No speech recognized.")
-            return None
-    except Exception as e:
-        print(f"[Whisper error: {e}]")
+        text = recognizer.recognize_google(audio, language=language_code)
+        print(f"User: {text}")
+        return text
+    except sr.UnknownValueError:
+        print("Speech not understood.")
+        return None
+    except sr.RequestError as e:
+        print(f"Google STT error: {e}")
         return None
 
-# ------------------ Language detection ------------------
+
+def listen_once_vosk(timeout=5):
+    """Capture audio and return recognized text using Vosk (offline)."""
+    if not HAS_VOSK:
+        return None
+
+    try:
+        model = VoskModel("vosk-model-small-en-us-0.15")
+        rec = KaldiRecognizer(model, 16000)
+
+        print("🎙️ Listening (Vosk)...")
+        audio = sd.rec(int(timeout * 16000), samplerate=16000, channels=1, dtype="int16")
+        sd.wait()
+
+        rec.AcceptWaveform(audio.tobytes())
+        result = json.loads(rec.Result())
+        text = result.get("text", "").strip()
+        if text:
+            print(f"User (Vosk): {text}")
+            return text
+    except Exception as e:
+        print(f"[Vosk error: {e}]")
+    return None
+
+
 def detect_language_choice(text: str):
+    """Detect if user said English or Hindi."""
     if not text:
         return None
     t = text.lower().strip()
-    english_keywords = ["english", "eng", "इंग्लिश", "अंग्रेजी"]
-    for word in english_keywords:
-        if word in t:
-            return "en"
-    hindi_keywords = ["hindi", "हिंदी", "हिन्दी"]
-    for word in hindi_keywords:
-        if word in t:
-            return "hi"
+
+    if any(word in t for word in ["english", "eng", "इंग्लिश", "अंग्रेजी"]):
+        return "en"
+    if any(word in t for word in ["hindi", "हिंदी", "हिन्दी"]):
+        return "hi"
+
     return None
 
-# ------------------ Helpers ------------------
+
 def get_time_based_greeting(lang="en"):
+    """Return time-based greeting in English or Hindi."""
     hour = datetime.datetime.now().hour
     if lang == "en":
         if 5 <= hour < 12:
@@ -114,7 +126,9 @@ def get_time_based_greeting(lang="en"):
         else:
             return "शुभ संध्या"
 
+
 def check_identity_question(text: str):
+    """Check if user asked about assistant or company."""
     if not text:
         return None
     t = text.lower()
@@ -124,13 +138,17 @@ def check_identity_question(text: str):
         return f"I work at {COMPANY_NAME}"
     return None
 
+
 def match_tab(user_text, tab_names):
+    """Fuzzy match user speech to a tab name."""
     if not user_text:
         return None
     user_text = user_text.lower()
+
     for name in tab_names:
         if name.lower() in user_text or user_text in name.lower():
             return name
+
     matches = difflib.get_close_matches(user_text, [t.lower() for t in tab_names], n=1, cutoff=0.6)
     if matches:
         for name in tab_names:
@@ -138,7 +156,7 @@ def match_tab(user_text, tab_names):
                 return name
     return None
 
-# ------------------ Prompts ------------------
+
 PROMPTS = {
     "welcome": {"en": "Welcome to Oxland"},
     "choose_lang": {"en": "Please choose your language: English or Hindi."},
@@ -148,7 +166,7 @@ PROMPTS = {
     "not_found": {"en": "Sorry, I couldn't find that tab. Exiting.", "hi": "क्षमा करें, वह टैब नहीं मिला। बाहर निकल रहा हूँ।"}
 }
 
-# ------------------ Main ------------------
+
 def main():
     try:
         with open(MODULES_FILE, "r", encoding="utf-8") as f:
@@ -157,29 +175,39 @@ def main():
         print(f"Error loading modules file: {e}")
         return
 
+    recognizer = sr.Recognizer()
+    mic = sr.Microphone()
+
     speak_and_print(PROMPTS["welcome"]["en"], "en")
     speak_and_print(PROMPTS["choose_lang"]["en"], "en")
 
     chosen = None
     while not chosen:
-        text = listen_once("en")
+        text = listen_once(recognizer, mic, "en-US")
         chosen = detect_language_choice(text)
         if not chosen:
-            text = listen_once("hi")
+            text = listen_once(recognizer, mic, "hi-IN")
             chosen = detect_language_choice(text)
         if not chosen:
             speak_and_print("Please say English or Hindi.", "en")
 
+    # --- Ask name ---
     name_text = None
     while not name_text:
         speak_and_print(PROMPTS["ask_name"][chosen], "hi" if chosen == "hi" else "en")
-        name_text = listen_once("hi" if chosen == "hi" else "en")
+        name_text = listen_once(recognizer, mic, "hi-IN" if chosen == "hi" else "en-US")
+
+        # Try Vosk if Google STT fails
+        if not name_text and HAS_VOSK:
+            name_text = listen_once_vosk(timeout=4)
+
         if not name_text:
             speak_and_print("Sorry, I didn't catch that. Please say your name again.", "hi" if chosen == "hi" else "en")
 
     greet = get_time_based_greeting(chosen)
     speak_and_print(f"{greet}, {name_text}", "hi" if chosen == "hi" else "en")
 
+    # --- Tab selection ---
     speak_and_print(PROMPTS["now_select_tab"][chosen], "hi" if chosen == "hi" else "en")
 
     tab_names = list(modules.keys())
@@ -187,7 +215,9 @@ def main():
 
     selected_tab = None
     while not selected_tab:
-        response = listen_once("hi" if chosen == "hi" else "en")
+        response = listen_once(recognizer, mic, "hi-IN" if chosen == "hi" else "en-US")
+        if not response and HAS_VOSK:
+            response = listen_once_vosk(timeout=5)
         if not response:
             continue
 
@@ -215,6 +245,7 @@ def main():
         webbrowser.open(url)
     else:
         speak_and_print(PROMPTS["not_found"][chosen], "hi" if chosen == "hi" else "en")
+
 
 if __name__ == "__main__":
     try:
